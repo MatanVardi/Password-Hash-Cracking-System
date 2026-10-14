@@ -1,27 +1,74 @@
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <openssl/evp.h>
+#include <string.h>
+#include <stdbool.h>
 #define MAX_LINE_LENGTH 50
 
-int main() {
+void bytes_to_hex_sprintf(const unsigned char *bytes, unsigned int length, char *output) {
+    for (unsigned int i = 0; i < length; ++i) {
+        sprintf(&output[i * 2], "%02x", bytes[i]);
+    }
+}
+
+
+int main()
+{
 
     FILE *wordlistPtr;
     char line[MAX_LINE_LENGTH];
+    unsigned char hash_output[EVP_MAX_MD_SIZE];
+    unsigned int hash_len = 0;
+    char hexdecimal_result[EVP_MAX_MD_SIZE + 1]; 
 
-    char file [] = "wordlist.txt";
+    char hashedString[] = "177ca70f42def1238e36da329473263ed3feadd14094c079a2230be0193436f5";
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    if (ctx == NULL)
+    {
+        return 1;
+    }
+    EVP_DigestInit_ex(ctx, EVP_sha256(), NULL);
+
+    char file[] = "wordlist.txt";
     wordlistPtr = fopen(file, "r");
 
-    if (wordlistPtr == NULL) {
+    if (wordlistPtr == NULL)
+    {
         printf("The file named %s doesn't exist", file);
+        EVP_MD_CTX_free(ctx);
+        return 1;
     }
 
-    while (fgets(line, MAX_LINE_LENGTH, wordlistPtr)) {
-        printf("%s", line);
+    bool foundString = false;
+
+    while (fgets(line, MAX_LINE_LENGTH, wordlistPtr) && !foundString)
+    {
+        // printf("%s", line);
+        line[strcspn(line, "\r\n")] = 0;
+
+        if (EVP_DigestInit_ex(ctx, EVP_sha256(), NULL) != 1) {
+            continue;
+        }
+
+        EVP_DigestUpdate(ctx, line, strlen(line));
+        EVP_DigestFinal_ex(ctx, hash_output, &hash_len);
+        
+        bytes_to_hex_sprintf(hash_output, hash_len, hexdecimal_result);
+
+        if (strcmp(hexdecimal_result, hashedString) == 0)
+        {
+            foundString = true;
+            printf("Found the string! Password is: %s\n", line);
+        }
     }
 
+    EVP_MD_CTX_free(ctx);
+    fclose(wordlistPtr);
 
-
-
+    if (!foundString)
+    {
+        printf("Password hash not found in the wordlist.\n");
+    }
 
     return 0;
 }
